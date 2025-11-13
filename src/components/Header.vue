@@ -7,14 +7,19 @@
       <nav class="nav">
         <ul>
           <li><router-link to="/" class="nav-link" active-class="active">首页</router-link></li>
-          <li><a href="#" class="nav-link">文章</a></li>
+          <li><router-link to="/articles" class="nav-link" active-class="active">文章</router-link></li>
           <li v-if="isLoggedIn"><router-link to="/post-article" class="nav-link">发表</router-link></li>
           <li><router-link :to="isLoggedIn ? '/profile' : '/login'" class="nav-link">关于我</router-link></li>
         </ul>
       </nav>
       <div class="search-box">
-        <input type="text" placeholder="搜索文章..." />
-        <button>🔍</button>
+        <input 
+          type="text" 
+          v-model="searchKeyword"
+          @keyup.enter="performSearch"
+          placeholder="搜索文章..." 
+        />
+        <button @click="performSearch">🔍</button>
       </div>
       <div v-if="isLoggedIn" class="user-menu">
         <div class="user-info" @click="toggleUserMenu">
@@ -55,6 +60,7 @@ const userInfo = reactive({
   avatar: ''
 });
 const userMenuOpen = ref(false);
+const searchKeyword = ref('');
 
 // 处理头像URL - 确保返回完整的可访问URL
 const getAvatarUrl = (avatarPath) => {
@@ -122,6 +128,22 @@ const handleLogout = () => {
     closeUserMenu();
     
     // 跳转到首页
+    router.push('/');
+  }
+};
+
+// 执行搜索
+const performSearch = () => {
+  const keyword = searchKeyword.value.trim();
+  
+  // 触发自定义事件，通知BlogList组件执行搜索
+  const searchEvent = new CustomEvent('searchArticles', {
+    detail: { keyword }
+  });
+  window.dispatchEvent(searchEvent);
+  
+  // 如果不在首页，跳转到首页
+  if (router.currentRoute.value.path !== '/') {
     router.push('/');
   }
 };

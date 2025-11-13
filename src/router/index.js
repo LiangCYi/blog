@@ -9,6 +9,11 @@ const routes = [
     component: Home
   },
   {
+    path: '/articles',
+    name: 'Articles',
+    component: () => import('../views/Articles.vue')
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('../views/Login.vue')
@@ -36,6 +41,20 @@ const routes = [
     path: '/post-article',
     name: 'PostArticle',
     component: () => import('../views/PostArticle.vue'),
+    meta: {
+      requiresAuth: true // 需要登录才能访问
+    }
+  },
+  {
+    path: '/article/:id',
+    name: 'ArticleDetail',
+    component: () => import('../views/ArticleDetail.vue')
+    // 文章详情页不需要登录限制，公开访问
+  },
+  {
+    path: '/my-articles',
+    name: 'MyArticles',
+    component: () => import('../views/MyArticles.vue'),
     meta: {
       requiresAuth: true // 需要登录才能访问
     }

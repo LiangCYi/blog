@@ -1,44 +1,39 @@
 <template>
   <div class="file-upload">
-    <div class="upload-container" :class="{ 'drag-active': isDragActive }" @drop.prevent="handleDrop" @dragover.prevent="handleDragOver" @dragleave.prevent="handleDragLeave">
+    <div class="upload-container" 
+         :class="{ 'drag-active': isDragActive, 'disabled': disabled }" 
+         @drop.prevent="handleDrop" 
+         @dragover.prevent="handleDragOver" 
+         @dragleave.prevent="handleDragLeave"
+         @click="disabled ? () => {} : handleContainerClick">
       <input 
         ref="fileInput" 
         type="file" 
-        :accept="accept" 
+        :accept="getAcceptString"
         @change="handleFileSelect"
         class="file-input"
         :multiple="multiple"
+        :disabled="disabled"
       />
       <div class="upload-content">
         <div class="upload-icon">📁</div>
         <p class="upload-text">点击或拖拽文件到此处上传</p>
         <p class="upload-hint" v-if="hint">{{ hint }}</p>
+        <p class="upload-hint" v-if="disabled">上传已禁用</p>
       </div>
     </div>
     
-    <!-- 上传进度条 -->
-    <div v-if="uploading" class="progress-container">
-      <div class="progress-bar">
-        <div class="progress-fill" :style="{ width: progress + '%' }"></div>
-      </div>
-      <span class="progress-text">{{ progress }}%</span>
-    </div>
-    
-    <!-- 上传结果 -->
-    <div v-if="uploadResult" class="upload-result" :class="uploadResult.success ? 'success' : 'error'">
-      {{ uploadResult.message }}
-    </div>
+
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { uploadFile } from '../utils/api';
+import { ref, computed } from 'vue';
 
 const props = defineProps({
-  // 接受的文件类型，例如 '.jpg,.png,.gif'
+  // 接受的文件类型，可以是字符串或数组
   accept: {
-    type: String,
+    type: [String, Array],
     default: ''
   },
   // 是否允许多文件上传
@@ -46,10 +41,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
-  // 上传接口地址
-  uploadUrl: {
-    type: String,
-    default: '/upload'
+  // 是否禁用上传
+  disabled: {
+    type: Boolean,
+    default: false
   },
   // 提示文本
   hint: {
@@ -58,7 +53,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['upload-success', 'upload-error', 'upload-progress']);
+const emit = defineEmits(['file-selected', 'upload-success', 'upload-error', 'upload-progress']);
 
 const fileInput = ref(null);
 const isDragActive = ref(false);
@@ -66,17 +61,42 @@ const uploading = ref(false);
 const progress = ref(0);
 const uploadResult = ref(null);
 
+// 将accept转换为字符串
+const getAcceptString = computed(() => {
+  if (Array.isArray(props.accept)) {
+    return props.accept.join(',');
+  }
+  return props.accept;
+});
+
+// 处理容器点击
+const handleContainerClick = () => {
+  if (!props.disabled) {
+    fileInput.value?.click();
+  }
+};
+
 // 处理文件选择
 const handleFileSelect = (event) => {
   const files = event.target.files;
   if (files.length > 0) {
-    processFiles(files);
+    // 直接发出文件选择事件，由父组件处理上传
+    const file = files[0];
+    emit('file-selected', file);
+    
+    // 重置文件输入，允许重复上传同一文件
+    if (fileInput.value) {
+      fileInput.value.value = '';
+    }
   }
 };
 
 // 处理拖拽
-const handleDragOver = () => {
-  isDragActive.value = true;
+const handleDragOver = (event) => {
+  if (!props.disabled) {
+    isDragActive.value = true;
+    event.dataTransfer.dropEffect = 'copy';
+  }
 };
 
 const handleDragLeave = () => {
@@ -85,58 +105,17 @@ const handleDragLeave = () => {
 
 const handleDrop = (event) => {
   isDragActive.value = false;
-  const files = event.dataTransfer.files;
-  if (files.length > 0) {
-    processFiles(files);
+  if (!props.disabled) {
+    const files = event.dataTransfer.files;
+    if (files.length > 0) {
+      // 直接发出文件选择事件，由父组件处理上传
+      const file = files[0];
+      emit('file-selected', file);
+    }
   }
 };
 
-// 处理文件上传
-const processFiles = async (files) => {
-  // 重置状态
-  uploadResult.value = null;
-  uploading.value = true;
-  progress.value = 0;
-  
-  try {
-    // 如果允许多文件上传，这里可以循环处理多个文件
-    // 现在先处理单个文件
-    const file = files[0];
-    
-    // 调用上传方法
-    const response = await uploadFile(props.uploadUrl, file, (percent) => {
-      progress.value = percent;
-      emit('upload-progress', percent);
-    });
-    
-    // 上传成功
-    uploadResult.value = {
-      success: true,
-      message: '文件上传成功',
-      data: response
-    };
-    emit('upload-success', response);
-    
-  } catch (error) {
-    // 上传失败
-    uploadResult.value = {
-      success: false,
-      message: error.response?.data?.message || '文件上传失败'
-    };
-    emit('upload-error', error);
-  } finally {
-    uploading.value = false;
-    // 重置文件输入，允许重复上传同一文件
-    if (fileInput.value) {
-      fileInput.value.value = '';
-    }
-    
-    // 3秒后清除结果提示
-    setTimeout(() => {
-      uploadResult.value = null;
-    }, 3000);
-  }
-};
+// 移除不需要的自动上传功能，由父组件处理上传逻辑
 
 // 暴露方法给父组件
 defineExpose({
@@ -162,10 +141,16 @@ defineExpose({
   background-color: #f9fafb;
 }
 
-.upload-container:hover,
-.upload-container.drag-active {
+.upload-container:hover:not(.disabled),
+.upload-container.drag-active:not(.disabled) {
   border-color: #667eea;
   background-color: #f3f4f6;
+}
+
+.upload-container.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #f9fafb;
 }
 
 .file-input {
